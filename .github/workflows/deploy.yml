@@ -1,0 +1,44 @@
+name: Frontend Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: frontend-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    name: Lint, build y deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_API_URL: https://ecohuancayo-backend.onrender.com/api/v1
+          NODE_OPTIONS: --max-old-space-size=400
+
+      - name: Disparar deploy hook de Render
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: curl -fsS -X POST "$HOOK_RENDER_FRONTEND"
+        env:
+          HOOK_RENDER_FRONTEND: ${{ secrets.HOOK_RENDER_FRONTEND }}
