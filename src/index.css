@@ -1,0 +1,251 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
+
+  /* Paleta corporativa EcoHuancayo: verde de marca + neutros cálidos. */
+  --color-eco-50: #ecfdf5;
+  --color-eco-100: #d1fae5;
+  --color-eco-200: #a7f3d0;
+  --color-eco-300: #6ee7b7;
+  --color-eco-400: #34d399;
+  --color-eco-500: #10b981;
+  --color-eco-600: #059669;
+  --color-eco-700: #047857;
+  --color-eco-800: #065f46;
+  --color-eco-900: #064e3b;
+  --color-eco-950: #022c22;
+  --color-eco-cyan: #06b6d4;
+
+  /* Animaciones suaves para toasts y modales */
+  --animate-fade-in: fade-in 200ms ease-out both;
+  --animate-toast-in: toast-in 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-toast-out: toast-out 150ms ease-in both;
+  --animate-toast-progress: toast-progress 4000ms linear forwards;
+  --animate-modal-in: modal-in 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+
+  /* Micro-interacciones del botón "Ingresar". */
+  --animate-ingresar-shimmer: ingresar-shimmer 900ms ease-in-out infinite;
+  --animate-ingresar-arrow-exit: ingresar-arrow-exit 260ms cubic-bezier(0.4, 0, 1, 1) both;
+  --animate-ingresar-spinner-in: ingresar-spinner-in 180ms ease-out 110ms both;
+  --animate-ingresar-progress: ingresar-progress 1100ms ease-in-out infinite;
+  --animate-ingresar-check: ingresar-check 340ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-ingresar-texto: ingresar-texto 180ms ease-out both;
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(-8px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  @keyframes toast-out {
+    from {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(-6px) scale(0.98);
+    }
+  }
+
+  @keyframes toast-progress {
+    from {
+      transform: scaleX(1);
+    }
+    to {
+      transform: scaleX(0);
+    }
+  }
+
+  @keyframes modal-in {
+    from {
+      opacity: 0;
+      transform: translateY(12px) scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  @keyframes ingresar-shimmer {
+    from {
+      transform: translateX(0) skewX(-12deg);
+    }
+    to {
+      transform: translateX(300%) skewX(-12deg);
+    }
+  }
+
+  @keyframes ingresar-arrow-exit {
+    from {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateX(150%);
+    }
+  }
+
+  @keyframes ingresar-spinner-in {
+    from {
+      opacity: 0;
+      transform: scale(0.7);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes ingresar-progress {
+    0% {
+      opacity: 0;
+      transform: scaleX(0);
+    }
+    20% {
+      opacity: 1;
+      transform: scaleX(0.45);
+    }
+    70% {
+      opacity: 1;
+      transform: scaleX(1);
+    }
+    100% {
+      opacity: 0;
+      transform: scaleX(1);
+    }
+  }
+
+  @keyframes ingresar-check {
+    0% {
+      opacity: 0;
+      transform: scale(0.6) rotate(-12deg);
+    }
+    60% {
+      opacity: 1;
+      transform: scale(1.12) rotate(4deg);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1) rotate(0);
+    }
+  }
+
+  @keyframes ingresar-texto {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply min-h-screen text-slate-900 antialiased;
+    margin: 0;
+    background-color: #f7f8f5;
+    background-image:
+      radial-gradient(circle at 12% 10%, rgb(163 177 155 / 0.10), transparent 40%),
+      radial-gradient(circle at 88% 8%, rgb(214 197 168 / 0.10), transparent 38%),
+      radial-gradient(circle at 78% 92%, rgb(167 195 178 / 0.09), transparent 42%),
+      linear-gradient(135deg, #fafbf9 0%, #f4f6f2 48%, #f7f4ee 100%);
+    background-attachment: fixed;
+  }
+
+  #root {
+    @apply min-h-screen;
+  }
+
+  ::selection {
+    @apply bg-emerald-100 text-emerald-950;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@layer utilities {
+  .scrollbar-slim {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-slate-300) transparent;
+  }
+
+  .scrollbar-slim::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-slim::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background-color: var(--color-slate-300);
+  }
+
+  .scrollbar-slim::-webkit-scrollbar-track {
+    background-color: transparent;
+  }
+
+  .fondo-eco {
+    background-color: #f7f8f5;
+    background-image:
+      radial-gradient(circle at 12% 10%, rgb(163 177 155 / 0.10), transparent 40%),
+      radial-gradient(circle at 88% 8%, rgb(214 197 168 / 0.10), transparent 38%),
+      radial-gradient(circle at 78% 92%, rgb(167 195 178 / 0.09), transparent 42%),
+      linear-gradient(135deg, #fafbf9 0%, #f4f6f2 48%, #f7f4ee 100%);
+    background-attachment: fixed;
+  }
+
+  .fondo-login {
+    background-color: #edf6ef;
+    background-image:
+      radial-gradient(circle at 82% 12%, rgb(16 185 129 / 0.14), transparent 38%),
+      radial-gradient(circle at 14% 88%, rgb(214 197 168 / 0.20), transparent 42%),
+      linear-gradient(135deg, #f8fbf7 0%, #e9f4ec 52%, #f4f1e8 100%);
+    background-attachment: fixed;
+  }
+
+  .tarjeta-eco {
+    @apply rounded-2xl border border-slate-200/80 bg-white shadow-lg shadow-slate-900/5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
