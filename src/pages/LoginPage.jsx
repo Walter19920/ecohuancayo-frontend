@@ -23,6 +23,7 @@ const BENEFICIOS = [
   "Registro y seguimiento de recojos en tiempo real",
   "Validación de RUC, DNI y placas peruanas",
   "Indicadores operativos y control de flota",
+  "Trazabilidad ambiental y reducción de residuos en Huancayo",
 ];
 
 const METRICAS = [
