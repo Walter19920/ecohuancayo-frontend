@@ -1,4 +1,5 @@
 import api from "../api/axiosClient";
+import { normalizarRol } from "../utils/validaciones";
 import {
   normalizarPaginado,
   parametrosPaginados,
@@ -18,7 +19,7 @@ export async function crearUsuario(payload) {
     id_empleado: Number(payload?.id_empleado),
     correo: String(payload?.correo ?? "").trim(),
     password: String(payload?.password ?? ""),
-    rol: String(payload?.rol ?? "OPERADOR").toUpperCase(),
+    rol: normalizarRol(payload?.rol) || "OPERADOR",
   });
   return data;
 }

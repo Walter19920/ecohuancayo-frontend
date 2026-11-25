@@ -15,7 +15,13 @@ export const HORA_REGEX = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
 export const FECHA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 export const PASSWORD_MIN_LENGTH = 8;
 
-const ROLES_VALIDOS = ["ADMIN", "EMPLEADO"];
+/** Roles aceptados por el contrato de `/usuarios`. */
+export const ROLES_VALIDOS = ["ADMIN", "SUPERVISOR", "OPERADOR"];
+
+/** Normaliza el rol a MAYÚSCULAS sin espacios, tal como lo espera la API. */
+export function normalizarRol(valor) {
+  return String(valor ?? "").trim().toUpperCase();
+}
 
 /** Indica si un valor está vacío (null, undefined o cadena en blanco). */
 export function esVacio(valor) {
@@ -363,7 +369,7 @@ export function validarUsuario(datos) {
     errores.confirmar_password = "Las contraseñas no coinciden.";
   }
 
-  const rol = String(datos?.rol ?? "").toUpperCase();
+  const rol = normalizarRol(datos?.rol);
   if (!ROLES_VALIDOS.includes(rol)) errores.rol = "Selecciona un rol válido.";
 
   return { valido: Object.keys(errores).length === 0, errores };
