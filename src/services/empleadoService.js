@@ -43,3 +43,9 @@ export async function obtenerHistorialCargos(idEmpleado) {
   const { data } = await api.get(`/empleados/${Number(idEmpleado)}/historial`);
   return Array.isArray(data) ? data : [];
 }
+
+/** GET /empleados/{id_empleado}/recojos */
+export async function obtenerHistorialRecojosEmpleado(idEmpleado) {
+  const { data } = await api.get(`/empleados/${Number(idEmpleado)}/recojos`);
+  return Array.isArray(data) ? data : [];
+}

@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
+  Bell,
   Building,
   ChevronRight,
   ClipboardList,
+  KeyRound,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -15,11 +17,17 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { useNotificaciones } from "../../context/NotificacionesContext";
 import { useToast } from "../../context/ToastContext";
+import ModalCambioContrasena from "../ui/ModalCambioContrasena";
+import ModalCambioMiPassword from "../ui/ModalCambioMiPassword";
 import {
   claseRol,
+  formatearFecha,
+  formatearHora,
   formatearRol,
   iniciales,
+  mensajeDeError,
 } from "../../utils/formatters";
 
 const NAVEGACION = [
@@ -70,22 +78,61 @@ const TITULOS = {
   "/mis-recojos": "Mis recojos",
 };
 
+function horaSolicitud(valor) {
+  const texto = String(valor ?? "");
+  return formatearHora(texto.length > 10 ? texto.slice(11) : texto);
+}
+
+const ROLES_CON_CAMBIO_PASSWORD = ["ADMIN", "SUPERVISOR", "OPERADOR"];
+
 export default function MainLayout() {
-  const { usuario, logout, rol } = useAuth();
+  const { usuario, logout, rol, cambiarMiPassword } = useAuth();
   const { toast } = useToast();
+  const {
+    solicitudes,
+    cambioSolicitud,
+    abrirCambio,
+    cerrarCambio,
+    guardarClave: guardarClaveSolicitud,
+  } = useNotificaciones();
   const navigate = useNavigate();
   const location = useLocation();
   const [menuAbierto, setMenuAbierto] = useState(false);
+  const [panelNotificaciones, setPanelNotificaciones] = useState(false);
+  const [guardandoClave, setGuardandoClave] = useState(false);
+  const [modalMiPassword, setModalMiPassword] = useState(false);
 
   const items = NAVEGACION.filter((item) => item.roles.includes(rol));
   const titulo = TITULOS[location.pathname] ?? "EcoHuancayo";
   const nombre = usuario?.nombre_completo ?? usuario?.correo ?? "Usuario";
+  const totalSolicitudes = solicitudes.length;
 
   function cerrarSesion() {
     logout();
     toast.info("Sesión cerrada");
     setMenuAbierto(false);
+    setPanelNotificaciones(false);
     navigate("/login", { replace: true });
+  }
+
+  async function guardarClave(nuevaPassword) {
+    if (!cambioSolicitud || guardandoClave) return;
+
+    setGuardandoClave(true);
+    try {
+      await guardarClaveSolicitud(cambioSolicitud, nuevaPassword);
+      cerrarCambio();
+      setPanelNotificaciones(false);
+    } catch (error) {
+      toast.error(mensajeDeError(error));
+    } finally {
+      setGuardandoClave(false);
+    }
+  }
+
+  async function guardarMiPassword(passwordActual, nuevaPassword) {
+    await cambiarMiPassword(passwordActual, nuevaPassword);
+    toast.success("Contraseña actualizada correctamente");
   }
 
   return (
@@ -227,6 +274,115 @@ export default function MainLayout() {
             </div>
 
             <div className="flex items-center gap-2 sm:gap-3">
+              {rol === "ADMIN" ? (
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPanelNotificaciones((valor) => !valor)
+                    }
+                    aria-label={`Notificaciones${
+                      totalSolicitudes > 0
+                        ? `, ${totalSolicitudes} solicitudes pendientes`
+                        : ""
+                    }`}
+                    aria-expanded={panelNotificaciones}
+                    className="relative inline-flex size-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors duration-200 hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                  >
+                    <Bell className="size-5" aria-hidden="true" />
+                    {totalSolicitudes > 0 ? (
+                      <span className="absolute -top-1 -right-1 flex min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[11px] font-bold text-white ring-2 ring-white">
+                        {totalSolicitudes}
+                      </span>
+                    ) : null}
+                  </button>
+
+                  {panelNotificaciones ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setPanelNotificaciones(false)}
+                        className="fixed inset-0 z-30 cursor-default"
+                        aria-label="Cerrar notificaciones"
+                      />
+
+                      <div className="absolute right-0 z-40 mt-2 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-slate-200">
+                        <div className="border-b border-slate-100 px-4 py-3">
+                          <p className="text-sm font-semibold text-slate-900">
+                            Solicitudes de contraseña
+                          </p>
+                          <p className="mt-0.5 text-xs text-slate-500">
+                            {totalSolicitudes === 1
+                              ? "1 solicitud pendiente"
+                              : `${totalSolicitudes} solicitudes pendientes`}
+                          </p>
+                        </div>
+
+                        <div className="scrollbar-slim max-h-96 overflow-y-auto p-2">
+                          {totalSolicitudes === 0 ? (
+                            <p className="px-3 py-6 text-center text-sm text-slate-500">
+                              No hay solicitudes pendientes.
+                            </p>
+                          ) : (
+                            solicitudes.map((solicitud) => (
+                              <article
+                                key={solicitud.id_solicitud}
+                                className="rounded-xl p-3 transition-colors duration-200 hover:bg-slate-50"
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <p className="truncate text-sm font-semibold text-slate-900">
+                                      {solicitud.nombre_completo ?? "—"}
+                                    </p>
+                                    <p className="truncate text-xs text-slate-500">
+                                      {solicitud.correo}
+                                    </p>
+                                  </div>
+                                  <span
+                                    className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ${claseRol(solicitud.rol)}`}
+                                  >
+                                    {formatearRol(solicitud.rol)}
+                                  </span>
+                                </div>
+
+                                <p className="mt-1 text-xs text-slate-500">
+                                  {formatearFecha(solicitud.fecha_solicitud)} ·{" "}
+                                  {horaSolicitud(solicitud.fecha_solicitud)}
+                                </p>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    abrirCambio(solicitud);
+                                    setPanelNotificaciones(false);
+                                  }}
+                                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition-colors duration-200 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                                >
+                                  <KeyRound className="size-3.5" aria-hidden="true" />
+                                  Asignar nueva clave
+                                </button>
+                              </article>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {ROLES_CON_CAMBIO_PASSWORD.includes(rol) ? (
+                <button
+                  type="button"
+                  onClick={() => setModalMiPassword(true)}
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 transition-colors duration-200 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                  aria-label="Cambiar mi contraseña"
+                >
+                  <KeyRound className="size-4" aria-hidden="true" />
+                  <span className="hidden md:inline">Cambiar mi contraseña</span>
+                </button>
+              ) : null}
+
               <span
                 className={`hidden items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ring-1 sm:inline-flex ${claseRol(rol)}`}
               >
@@ -272,6 +428,24 @@ export default function MainLayout() {
           </div>
         </main>
       </div>
+
+      <ModalCambioContrasena
+        key={cambioSolicitud?.id_solicitud ?? "sin-solicitud"}
+        abierto={Boolean(cambioSolicitud)}
+        usuario={cambioSolicitud}
+        cargando={guardandoClave}
+        onGuardar={guardarClave}
+        onCerrar={() => {
+          if (!guardandoClave) cerrarCambio();
+        }}
+      />
+
+      <ModalCambioMiPassword
+        key={modalMiPassword ? "mi-password-abierta" : "mi-password-cerrada"}
+        abierto={modalMiPassword}
+        onGuardar={guardarMiPassword}
+        onCerrar={() => setModalMiPassword(false)}
+      />
     </div>
   );
 }

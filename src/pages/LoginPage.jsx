@@ -12,10 +12,12 @@ import {
   Recycle,
   Route,
   ShieldCheck,
+  X,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { rutaInicialPorRol } from "../utils/roles";
 import { useToast } from "../context/ToastContext";
+import { solicitarCambioContrasena } from "../services/authService";
 import { mensajeDeError } from "../utils/formatters";
 import { validarCorreo, validarRequerido } from "../utils/validaciones";
 
@@ -60,6 +62,10 @@ function claseCampo(tieneError) {
   }`;
 }
 
+const DOMINIO_CORPORATIVO = "@ecohuancayo.pe";
+const MENSAJE_CONFIRMACION_SOLICITUD =
+  "Si el correo pertenece a una cuenta activa, se notificó al Administrador.";
+
 export default function LoginPage() {
   const { login, autenticado, cargando, usuario, rutaInicio } = useAuth();
   const { toast } = useToast();
@@ -72,6 +78,7 @@ export default function LoginPage() {
   const [errores, setErrores] = useState({});
   const [errorGeneral, setErrorGeneral] = useState("");
   const [faseBoton, setFaseBoton] = useState("inicial");
+  const [modalSolicitud, setModalSolicitud] = useState(null);
   const temporizadorExito = useRef(null);
 
   useEffect(
@@ -179,6 +186,71 @@ export default function LoginPage() {
       }
 
       setErrorGeneral(mensaje);
+      toast.error(mensaje);
+    }
+  }
+
+  function abrirModalSolicitud() {
+    setModalSolicitud({
+      correo: correo.trim(),
+      error: "",
+      enviando: false,
+      confirmado: false,
+      mensaje: "",
+    });
+  }
+
+  function cerrarModalSolicitud() {
+    if (modalSolicitud?.enviando) return;
+    setModalSolicitud(null);
+  }
+
+  function cambiarCorreoSolicitud(valor) {
+    setModalSolicitud((actual) =>
+      actual ? { ...actual, correo: valor, error: "" } : actual,
+    );
+  }
+
+  async function enviarSolicitud(evento) {
+    evento.preventDefault();
+    if (!modalSolicitud || modalSolicitud.enviando || modalSolicitud.confirmado) {
+      return;
+    }
+
+    try {
+      const correoNormalizado = String(modalSolicitud.correo ?? "")
+        .trim()
+        .toLowerCase();
+      const errorFormato = validarCorreo(correoNormalizado);
+      const errorDominio = correoNormalizado.endsWith(DOMINIO_CORPORATIVO)
+        ? null
+        : `Usa tu correo corporativo ${DOMINIO_CORPORATIVO}.`;
+      const error = errorFormato ?? errorDominio;
+
+      if (error) {
+        setModalSolicitud((actual) => ({ ...actual, error }));
+        return;
+      }
+
+      setModalSolicitud((actual) => ({ ...actual, enviando: true, error: "" }));
+
+      const respuesta = await solicitarCambioContrasena(correoNormalizado);
+      setModalSolicitud((actual) => ({
+        ...actual,
+        enviando: false,
+        confirmado: true,
+        mensaje:
+          typeof respuesta?.mensaje === "string" && respuesta.mensaje
+            ? respuesta.mensaje
+            : MENSAJE_CONFIRMACION_SOLICITUD,
+      }));
+    } catch (errorSolicitud) {
+      const mensaje = mensajeDeError(errorSolicitud);
+      setModalSolicitud((actual) =>
+        actual
+          ? { ...actual, enviando: false, error: mensaje }
+          : actual,
+      );
       toast.error(mensaje);
     }
   }
@@ -518,6 +590,16 @@ export default function LoginPage() {
               </button>
             </form>
 
+            <div className="mt-4 text-center">
+              <button
+                type="button"
+                onClick={abrirModalSolicitud}
+                className="rounded text-sm font-semibold text-emerald-700 underline decoration-emerald-300 underline-offset-4 transition-colors duration-200 hover:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
+              >
+                ¿Olvidaste tu contraseña? Solicitar cambio al Administrador
+              </button>
+            </div>
+
             <div className="mt-6 border-t border-slate-100 pt-5">
               <div className="flex items-center justify-center gap-2 text-center text-xs leading-5 text-slate-500">
                 <ShieldCheck
@@ -525,14 +607,142 @@ export default function LoginPage() {
                   aria-hidden="true"
                 />
                 <span>
-                  Acceso exclusivo para personal autorizado · roles ADMIN y
-                  OPERADOR
+                  {"Acceso exclusivo para personal autorizado · roles ADMIN, SUPERVISOR y OPERADOR"}
                 </span>
               </div>
             </div>
           </div>
         </div>
       </section>
+
+      {modalSolicitud ? (
+        <div className="fixed inset-0 z-[80] flex items-end justify-center p-4 sm:items-center">
+          <div
+            className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
+            onClick={cerrarModalSolicitud}
+            aria-hidden="true"
+          />
+
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="titulo-solicitud-contrasena"
+            className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-slate-200"
+          >
+            <button
+              type="button"
+              onClick={cerrarModalSolicitud}
+              disabled={modalSolicitud.enviando}
+              aria-label="Cerrar solicitud"
+              className="absolute top-4 right-4 inline-flex size-8 items-center justify-center rounded-lg text-slate-400 transition-colors duration-200 hover:bg-slate-100 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <X className="size-5" aria-hidden="true" />
+            </button>
+
+            {modalSolicitud.confirmado ? (
+              <div className="text-center">
+                <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                  <CircleCheckBig className="size-6" aria-hidden="true" />
+                </span>
+                <h2
+                  id="titulo-solicitud-contrasena"
+                  className="mt-4 text-lg font-semibold text-slate-900"
+                >
+                  Solicitud enviada
+                </h2>
+                <p
+                  className="mt-2 text-sm leading-6 text-slate-600"
+                  role="status"
+                  aria-live="polite"
+                >
+                  {modalSolicitud.mensaje}
+                </p>
+                <button
+                  type="button"
+                  onClick={cerrarModalSolicitud}
+                  className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors duration-200 hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
+                >
+                  Entendido
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={enviarSolicitud}>
+                <h2
+                  id="titulo-solicitud-contrasena"
+                  className="pr-8 text-lg font-semibold text-slate-900"
+                >
+                  Solicitar cambio de contraseña
+                </h2>
+                <p className="mt-1 pr-8 text-sm leading-6 text-slate-600">
+                  Ingresa tu correo corporativo y el Administrador recibirá la
+                  solicitud para asignarte una nueva clave.
+                </p>
+
+                <label
+                  htmlFor="correo-solicitud"
+                  className="mt-5 mb-1.5 block text-sm font-medium text-slate-700"
+                >
+                  Correo corporativo
+                </label>
+                <div
+                  className={`flex items-center gap-2 rounded-xl border bg-white px-3 py-2.5 shadow-sm transition-colors duration-200 focus-within:ring-2 ${
+                    modalSolicitud.error
+                      ? "border-red-400 focus-within:ring-red-400"
+                      : "border-slate-200 focus-within:ring-emerald-500"
+                  }`}
+                >
+                  <Mail className="size-4 shrink-0 text-slate-400" aria-hidden="true" />
+                  <input
+                    id="correo-solicitud"
+                    type="email"
+                    autoComplete="email"
+                    value={modalSolicitud.correo}
+                    onChange={(evento) =>
+                      cambiarCorreoSolicitud(evento.target.value)
+                    }
+                    placeholder="nombre@ecohuancayo.pe"
+                    disabled={modalSolicitud.enviando}
+                    className="w-full bg-transparent text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
+                    aria-invalid={Boolean(modalSolicitud.error)}
+                  />
+                </div>
+                {modalSolicitud.error ? (
+                  <p
+                    className="mt-1 text-sm text-red-600"
+                    role="alert"
+                    aria-live="assertive"
+                  >
+                    {modalSolicitud.error}
+                  </p>
+                ) : null}
+
+                <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={cerrarModalSolicitud}
+                    disabled={modalSolicitud.enviando}
+                    className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors duration-200 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={modalSolicitud.enviando}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors duration-200 hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-wait disabled:opacity-70"
+                  >
+                    {modalSolicitud.enviando ? (
+                      <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+                    ) : null}
+                    {modalSolicitud.enviando
+                      ? "Enviando..."
+                      : "Enviar solicitud"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

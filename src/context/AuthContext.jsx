@@ -13,7 +13,11 @@ import {
   onUnauthorized,
   saveSession,
 } from "../api/axiosClient";
-import { login as loginRequest, obtenerSesion } from "../services/authService";
+import {
+  cambiarMiPassword as cambiarMiPasswordRequest,
+  login as loginRequest,
+  obtenerSesion,
+} from "../services/authService";
 import { rutaInicialPorRol } from "../utils/roles";
 
 const AuthContext = createContext(null);
@@ -88,6 +92,10 @@ export function AuthProvider({ children }) {
     setCargando(false);
   }, []);
 
+  const cambiarMiPassword = useCallback(async (passwordActual, nuevaPassword) => {
+    return cambiarMiPasswordRequest(passwordActual, nuevaPassword);
+  }, []);
+
   const rol = String(usuario?.rol ?? "").trim().toUpperCase();
 
   const value = useMemo(
@@ -103,8 +111,9 @@ export function AuthProvider({ children }) {
       rutaInicio: rutaInicialPorRol(rol),
       login,
       logout,
+      cambiarMiPassword,
     }),
-    [usuario, token, cargando, rol, login, logout],
+    [usuario, token, cargando, rol, login, logout, cambiarMiPassword],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

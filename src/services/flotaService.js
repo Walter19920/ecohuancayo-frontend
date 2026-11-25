@@ -22,3 +22,9 @@ export async function registrarVehiculo(payload) {
   });
   return data;
 }
+
+/** PATCH /flota/{id_vehiculo}/estado (ADMIN o SUPERVISOR) */
+export async function actualizarEstadoVehiculo(idVehiculo, estado) {
+  const { data } = await api.patch(`/flota/${idVehiculo}/estado`, { estado });
+  return data;
+}

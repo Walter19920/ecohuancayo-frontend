@@ -20,6 +20,7 @@ import {
 } from "../services/usuarioService";
 import { listarEmpleados } from "../services/empleadoService";
 import ConfirmModal from "../components/ui/ConfirmModal";
+import ModalCambioContrasena from "../components/ui/ModalCambioContrasena";
 import { useToast } from "../context/ToastContext";
 import {
   claseRol,
@@ -30,7 +31,7 @@ import {
 } from "../utils/formatters";
 import { PAGINA_AUXILIAR } from "../utils/paginacion";
 import Pagination from "../components/ui/Pagination";
-import { validarPassword, validarUsuario } from "../utils/validaciones";
+import { validarUsuario } from "../utils/validaciones";
 
 function claseInput(tieneError) {
   return `w-full rounded-xl border bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-sm transition-colors duration-200 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:bg-slate-100 ${
@@ -360,13 +361,7 @@ export default function UsuariosPage() {
   }
 
   function abrirModalPassword(usuario) {
-    setModalPassword({
-      usuario,
-      password: "",
-      confirmar: "",
-      errores: {},
-      guardando: false,
-    });
+    setModalPassword({ usuario, guardando: false });
   }
 
   function cerrarModalPassword() {
@@ -374,41 +369,15 @@ export default function UsuariosPage() {
     setModalPassword(null);
   }
 
-  function actualizarCampoPassword(campo, valor) {
-    setModalPassword((actual) => {
-      if (!actual) return actual;
-      const erroresActuales = { ...actual.errores };
-      delete erroresActuales[campo];
-      return { ...actual, [campo]: valor, errores: erroresActuales };
-    });
-  }
-
-  async function confirmarPassword() {
+  async function confirmarPassword(nuevaPassword) {
     if (!modalPassword || modalPassword.guardando) return;
-
-    const erroresPassword = {};
-
-    const errorPassword = validarPassword(modalPassword.password);
-    if (errorPassword) erroresPassword.password = errorPassword;
-
-    if (!modalPassword.confirmar) {
-      erroresPassword.confirmar = "Confirma la contraseña.";
-    } else if (modalPassword.confirmar !== modalPassword.password) {
-      erroresPassword.confirmar = "Las contraseñas no coinciden.";
-    }
-
-    if (Object.keys(erroresPassword).length > 0) {
-      setModalPassword((actual) => ({ ...actual, errores: erroresPassword }));
-      toast.error("Revisa la nueva contraseña.");
-      return;
-    }
 
     setModalPassword((actual) => ({ ...actual, guardando: true }));
 
     try {
       await cambiarPasswordUsuario(
         modalPassword.usuario.id_usuario,
-        modalPassword.password,
+        nuevaPassword,
       );
       toast.success("Contraseña actualizada correctamente.");
       setModalPassword(null);
@@ -872,41 +841,14 @@ export default function UsuariosPage() {
         onCerrar={cerrarModalEstado}
       />
 
-      <ConfirmModal
+      <ModalCambioContrasena
+        key={modalPassword?.usuario?.id_usuario ?? "sin-usuario"}
         abierto={Boolean(modalPassword)}
-        titulo="Cambiar contraseña"
-        mensaje={
-          modalPassword
-            ? `Define una nueva contraseña para ${modalPassword.usuario.nombre_completo}.`
-            : undefined
-        }
-        confirmarTexto="Cambiar contraseña"
-        cancelarTexto="Cancelar"
-        variante="advertencia"
+        usuario={modalPassword?.usuario}
         cargando={modalPassword?.guardando ?? false}
-        onConfirmar={confirmarPassword}
+        onGuardar={confirmarPassword}
         onCerrar={cerrarModalPassword}
-      >
-        <div className="space-y-4">
-          <CampoPassword
-            id="cambio-password"
-            etiqueta="Nueva contraseña"
-            valor={modalPassword?.password ?? ""}
-            error={modalPassword?.errores?.password}
-            onCambiar={(valor) => actualizarCampoPassword("password", valor)}
-            deshabilitado={modalPassword?.guardando ?? false}
-          />
-
-          <CampoPassword
-            id="cambio-confirmar"
-            etiqueta="Confirmar contraseña"
-            valor={modalPassword?.confirmar ?? ""}
-            error={modalPassword?.errores?.confirmar}
-            onCambiar={(valor) => actualizarCampoPassword("confirmar", valor)}
-            deshabilitado={modalPassword?.guardando ?? false}
-          />
-        </div>
-      </ConfirmModal>
+      />
     </div>
   );
 }

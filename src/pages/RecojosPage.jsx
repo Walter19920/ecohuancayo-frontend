@@ -41,6 +41,27 @@ const ESTILOS_ESTADO = {
   cancelado: "bg-rose-100 text-rose-700 ring-rose-200",
 };
 
+const CARGOS_OPERATIVOS = [
+  "Conductor de Unidad Pesada",
+  "Operario de Recolección",
+];
+
+function textoCentro(centro) {
+  const nombre = centro?.nombre_centro ?? centro?.nombre ?? "";
+  const distrito = centro?.distrito ?? "";
+  return distrito ? `${nombre} — ${distrito}` : nombre;
+}
+
+function textoEstado(estado) {
+  const nombre = estado?.nombre_estado_recojo ?? estado?.nombre ?? "";
+  const descripcion = estado?.descripcion ?? "";
+  return descripcion ? `${nombre} — ${descripcion}` : nombre;
+}
+
+function nombreResiduo(residuo) {
+  return residuo?.nombre_tipo_residuo ?? residuo?.nombre ?? "";
+}
+
 function EstadoBadge({ estado }) {
   const clave = String(estado ?? "").toLowerCase();
   const estilo =
@@ -256,6 +277,8 @@ export default function RecojosPage() {
   const [actualizandoId, setActualizandoId] = useState(null);
 
   const formRef = useRef(null);
+  const hoy = fechaHoy();
+  const horaActualHHMM = horaAhora();
 
   useEffect(() => {
     const temporizador = window.setTimeout(() => {
@@ -349,11 +372,15 @@ export default function RecojosPage() {
     [clientes],
   );
   const vehiculosActivos = useMemo(
-    () => vehiculos.filter((vehiculo) => vehiculo.estado !== false),
+    () => vehiculos.filter((vehiculo) => vehiculo.estado === "Disponible"),
     [vehiculos],
   );
-  const empleadosActivos = useMemo(
-    () => empleados.filter((empleado) => empleado.estado !== false),
+  const empleadosOperativos = useMemo(
+    () =>
+      empleados.filter(
+        (emp) =>
+          emp.estado === true && CARGOS_OPERATIVOS.includes(emp.cargo_actual),
+      ),
     [empleados],
   );
 
@@ -460,6 +487,7 @@ export default function RecojosPage() {
   function alternarEmpleado(idEmpleado) {
     setFormulario((anterior) => {
       const existe = anterior.empleados.includes(idEmpleado);
+      if (!existe && anterior.empleados.length >= 2) return anterior;
       return {
         ...anterior,
         empleados: existe
@@ -495,6 +523,8 @@ export default function RecojosPage() {
     const resultado = validarRecojo(
       formulario,
       capacidad > 0 ? capacidad : null,
+      hoy,
+      horaActualHHMM,
     );
 
     if (!resultado.valido) {
@@ -744,7 +774,7 @@ export default function RecojosPage() {
                 ayuda={
                   vehiculoSeleccionado
                     ? `Capacidad: ${formatearKg(capacidad)}`
-                    : "Solo se muestran vehículos activos."
+                    : "Solo se muestran vehículos disponibles."
                 }
               >
                 <select
@@ -788,11 +818,14 @@ export default function RecojosPage() {
                   aria-invalid={Boolean(errores.id_centro_reciclaje)}
                 >
                   <option value="">Selecciona un centro</option>
-                  {catalogos.centros_reciclaje.map((centro) => (
-                    <option key={centro.id} value={centro.id}>
-                      {centro.nombre}
-                    </option>
-                  ))}
+                  {catalogos.centros_reciclaje.map((centro) => {
+                    const id = centro.id_centro_reciclaje ?? centro.id;
+                    return (
+                      <option key={id} value={id}>
+                        {textoCentro(centro)}
+                      </option>
+                    );
+                  })}
                 </select>
               </Campo>
 
@@ -813,11 +846,14 @@ export default function RecojosPage() {
                   aria-invalid={Boolean(errores.id_estado_recojo)}
                 >
                   <option value="">Selecciona un estado</option>
-                  {estados.map((estado) => (
-                    <option key={estado.id} value={estado.id}>
-                      {estado.nombre}
-                    </option>
-                  ))}
+                  {estados.map((estado) => {
+                    const id = estado.id_estado_recojo ?? estado.id;
+                    return (
+                      <option key={id} value={id}>
+                        {textoEstado(estado)}
+                      </option>
+                    );
+                  })}
                 </select>
               </Campo>
 
@@ -830,6 +866,7 @@ export default function RecojosPage() {
                 <input
                   id="recojo-fecha"
                   type="date"
+                  min={hoy}
                   value={formulario.fecha_recojo}
                   onChange={(evento) =>
                     actualizarCampo("fecha_recojo", evento.target.value)
@@ -848,6 +885,9 @@ export default function RecojosPage() {
                 <input
                   id="recojo-hora"
                   type="time"
+                  min={
+                    formulario.fecha_recojo === hoy ? horaActualHHMM : undefined
+                  }
                   value={formulario.hora_recojo}
                   onChange={(evento) =>
                     actualizarCampo("hora_recojo", evento.target.value)
@@ -913,11 +953,14 @@ export default function RecojosPage() {
                           aria-invalid={Boolean(errorFila.id_tipo_residuo)}
                         >
                           <option value="">Tipo de residuo</option>
-                          {catalogos.tipos_residuo.map((tipo) => (
-                            <option key={tipo.id} value={tipo.id}>
-                              {tipo.nombre}
-                            </option>
-                          ))}
+                          {catalogos.tipos_residuo.map((tipo) => {
+                            const id = tipo.id_tipo_residuo ?? tipo.id;
+                            return (
+                              <option key={id} value={id}>
+                                {nombreResiduo(tipo)}
+                              </option>
+                            );
+                          })}
                         </select>
                         {errorFila.id_tipo_residuo ? (
                           <p className="mt-1 text-sm text-red-600">
@@ -987,36 +1030,51 @@ export default function RecojosPage() {
               >
                 <Users className="size-4 text-emerald-600" aria-hidden="true" />
                 Empleados asignados
-                <span className="font-normal text-slate-500">(opcional)</span>
+                <span className="text-red-600">*</span>
               </h3>
 
-              {empleadosActivos.length === 0 ? (
+              {formulario.empleados.length >= 2 ? (
+                <p className="mt-2 text-xs font-medium text-amber-600">
+                  Máximo 2 operarios por unidad
+                </p>
+              ) : null}
+
+              {empleadosOperativos.length === 0 ? (
                 <p className="mt-3 text-sm text-slate-500">
-                  No hay empleados activos disponibles.
+                  No hay empleados operativos disponibles.
                 </p>
               ) : (
                 <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {empleadosActivos.map((empleado) => {
+                  {empleadosOperativos.map((empleado) => {
                     const id = Number(empleado.id_empleado);
                     const marcado = formulario.empleados.includes(id);
+                    const bloqueado = !marcado && formulario.empleados.length >= 2;
 
                     return (
                       <label
                         key={id}
-                        className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-colors duration-200 ${
+                        className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-colors duration-200 ${
                           marcado
-                            ? "border-emerald-300 bg-emerald-50 text-emerald-800"
-                            : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                            ? "cursor-pointer border-emerald-300 bg-emerald-50 text-emerald-800"
+                            : bloqueado
+                              ? "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400 opacity-60"
+                              : "cursor-pointer border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                         }`}
                       >
                         <input
                           type="checkbox"
                           checked={marcado}
+                          disabled={bloqueado}
                           onChange={() => alternarEmpleado(id)}
                           className="size-4 rounded border-slate-200 text-emerald-600 focus:ring-emerald-500"
                         />
-                        <span className="truncate">
-                          {empleado.nombres} {empleado.apellidos}
+                        <span className="flex min-w-0 flex-col">
+                          <span className="truncate">
+                            {empleado.nombres} {empleado.apellidos}
+                          </span>
+                          <span className="truncate text-xs text-slate-500">
+                            {empleado.cargo_actual}
+                          </span>
                         </span>
                       </label>
                     );

@@ -15,9 +15,14 @@ import {
   asignarCargo,
   listarEmpleados,
   obtenerHistorialCargos,
+  obtenerHistorialRecojosEmpleado,
   registrarEmpleado,
 } from "../services/empleadoService";
-import { listarVehiculos, registrarVehiculo } from "../services/flotaService";
+import {
+  actualizarEstadoVehiculo,
+  listarVehiculos,
+  registrarVehiculo,
+} from "../services/flotaService";
 import { consultarDni } from "../services/externoService";
 import { useCatalogos } from "../hooks/useCatalogos";
 import ConfirmModal from "../components/ui/ConfirmModal";
@@ -26,6 +31,7 @@ import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import {
   formatearFecha,
+  formatearHora,
   formatearKg,
   mensajeDeError,
   textoEstado,
@@ -95,6 +101,41 @@ function EstadoBadge({ estado }) {
       {textoEstado(activo)}
     </span>
   );
+}
+
+const ESTADOS_VEHICULO = [
+  "Disponible",
+  "En Ruta",
+  "Mantenimiento",
+  "Inactivo",
+];
+
+const ESTILOS_ESTADO_VEHICULO = {
+  Disponible: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  "En Ruta": "bg-sky-50 text-sky-700 ring-sky-200",
+  Mantenimiento: "bg-amber-50 text-amber-800 ring-amber-200",
+  Inactivo: "bg-slate-100 text-slate-600 ring-slate-200",
+};
+
+function EstadoVehiculoBadge({ estado }) {
+  const texto = estado || "—";
+  const estilo =
+    ESTILOS_ESTADO_VEHICULO[texto] ??
+    "bg-slate-100 text-slate-600 ring-slate-200";
+
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${estilo}`}
+    >
+      {texto}
+    </span>
+  );
+}
+
+function textoCargo(cargo) {
+  const nombre = cargo?.nombre_cargo ?? cargo?.nombre ?? "";
+  const descripcion = cargo?.descripcion ?? "";
+  return descripcion ? `${nombre} — ${descripcion}` : nombre;
 }
 
 function BloqueError({ titulo, mensaje, onReintentar }) {
@@ -494,6 +535,19 @@ export default function OperacionesPage() {
     }
   }
 
+  async function cambiarEstadoVehiculo(vehiculo, estado) {
+    if (!puedeGestionar || estado === vehiculo.estado) return;
+
+    try {
+      await actualizarEstadoVehiculo(vehiculo.id_vehiculo, estado);
+      toast.success("Estado del vehículo actualizado correctamente.");
+    } catch (err) {
+      toast.error(mensajeDeError(err));
+    } finally {
+      recargar();
+    }
+  }
+
   function abrirModalCargo(empleado) {
     setModalCargo({
       empleado,
@@ -540,27 +594,53 @@ export default function OperacionesPage() {
   async function abrirHistorial(empleado) {
     setHistorial({
       empleado,
+      pestana: "cargos",
       cargando: true,
       datos: [],
       error: "",
+      cargandoRecojos: true,
+      datosRecojos: [],
+      errorRecojos: "",
     });
 
-    try {
-      const datos = await obtenerHistorialCargos(empleado.id_empleado);
-      setHistorial((actual) =>
-        actual && actual.empleado.id_empleado === empleado.id_empleado
-          ? { ...actual, cargando: false, datos }
-          : actual,
-      );
-    } catch (err) {
-      const mensaje = mensajeDeError(err);
-      setHistorial((actual) =>
-        actual && actual.empleado.id_empleado === empleado.id_empleado
-          ? { ...actual, cargando: false, error: mensaje }
-          : actual,
-      );
-      toast.error(mensaje);
+    const [resultadoCargos, resultadoRecojos] = await Promise.allSettled([
+      obtenerHistorialCargos(empleado.id_empleado),
+      obtenerHistorialRecojosEmpleado(empleado.id_empleado),
+    ]);
+
+    setHistorial((actual) =>
+      actual && actual.empleado.id_empleado === empleado.id_empleado
+        ? {
+            ...actual,
+            cargando: false,
+            datos:
+              resultadoCargos.status === "fulfilled" ? resultadoCargos.value : [],
+            error:
+              resultadoCargos.status === "rejected"
+                ? mensajeDeError(resultadoCargos.reason)
+                : "",
+            cargandoRecojos: false,
+            datosRecojos:
+              resultadoRecojos.status === "fulfilled"
+                ? resultadoRecojos.value
+                : [],
+            errorRecojos:
+              resultadoRecojos.status === "rejected"
+                ? mensajeDeError(resultadoRecojos.reason)
+                : "",
+          }
+        : actual,
+    );
+
+    for (const resultado of [resultadoCargos, resultadoRecojos]) {
+      if (resultado.status === "rejected") {
+        toast.error(mensajeDeError(resultado.reason));
+      }
     }
+  }
+
+  function cambiarPestanaHistorial(pestana) {
+    setHistorial((actual) => (actual ? { ...actual, pestana } : actual));
   }
 
   function cerrarHistorial() {
@@ -574,6 +654,27 @@ export default function OperacionesPage() {
         ),
       )
     : [];
+
+  const historialRecojos = historial
+    ? [...historial.datosRecojos].sort((a, b) => {
+        const porFecha = String(b?.fecha_recojo ?? "").localeCompare(
+          String(a?.fecha_recojo ?? ""),
+        );
+        if (porFecha !== 0) return porFecha;
+
+        const porHora = String(b?.hora_recojo ?? "").localeCompare(
+          String(a?.hora_recojo ?? ""),
+        );
+        if (porHora !== 0) return porHora;
+
+        return Number(b?.id_recojo ?? 0) - Number(a?.id_recojo ?? 0);
+      })
+    : [];
+
+  const totalKgHistorial = historialRecojos.reduce(
+    (total, recojo) => total + (Number(recojo.total_kg) || 0),
+    0,
+  );
 
   const dniValido = validarDni(formularioEmpleado.dni) === null;
 
@@ -1215,7 +1316,7 @@ export default function OperacionesPage() {
                     <input
                       id="vehiculo-capacidad"
                       type="number"
-                      min="0.01"
+                      min="100"
                       step="0.01"
                       inputMode="decimal"
                       value={formularioVehiculo.capacidad_kg}
@@ -1342,6 +1443,9 @@ export default function OperacionesPage() {
                         <th scope="col" className="px-4 py-3">
                           Estado
                         </th>
+                        <th scope="col" className="px-4 py-3">
+                          Acciones
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -1360,7 +1464,30 @@ export default function OperacionesPage() {
                             {formatearKg(vehiculo.capacidad_kg)}
                           </td>
                           <td className="px-4 py-3">
-                            <EstadoBadge estado={vehiculo.estado} />
+                            <EstadoVehiculoBadge estado={vehiculo.estado} />
+                          </td>
+                          <td className="px-4 py-3">
+                            {puedeGestionar ? (
+                              <select
+                                aria-label={`Cambiar estado del vehículo ${vehiculo.placa ?? ""}`}
+                                value={vehiculo.estado ?? ""}
+                                onChange={(evento) =>
+                                  cambiarEstadoVehiculo(
+                                    vehiculo,
+                                    evento.target.value,
+                                  )
+                                }
+                                className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                              >
+                                {ESTADOS_VEHICULO.map((estado) => (
+                                  <option key={estado} value={estado}>
+                                    {estado}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <span className="text-xs text-slate-400">—</span>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -1384,7 +1511,7 @@ export default function OperacionesPage() {
                           {vehiculo.tipo_vehiculo ?? "—"}
                         </p>
                       </div>
-                      <EstadoBadge estado={vehiculo.estado} />
+                      <EstadoVehiculoBadge estado={vehiculo.estado} />
                     </div>
 
                     <dl className="mt-3">
@@ -1393,6 +1520,34 @@ export default function OperacionesPage() {
                         {formatearKg(vehiculo.capacidad_kg)}
                       </dd>
                     </dl>
+
+                    {puedeGestionar ? (
+                      <div className="mt-3">
+                        <label
+                          htmlFor={`estado-vehiculo-${vehiculo.id_vehiculo}`}
+                          className="mb-1 block text-xs font-medium text-slate-600"
+                        >
+                          Cambiar estado
+                        </label>
+                        <select
+                          id={`estado-vehiculo-${vehiculo.id_vehiculo}`}
+                          value={vehiculo.estado ?? ""}
+                          onChange={(evento) =>
+                            cambiarEstadoVehiculo(
+                              vehiculo,
+                              evento.target.value,
+                            )
+                          }
+                          className={claseInput(false)}
+                        >
+                          {ESTADOS_VEHICULO.map((estado) => (
+                            <option key={estado} value={estado}>
+                              {estado}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : null}
                   </article>
                 ))}
               </div>
@@ -1443,7 +1598,7 @@ export default function OperacionesPage() {
                   id="titulo-historial"
                   className="text-lg font-semibold text-slate-900"
                 >
-                  Historial de cargos
+                  Historial del empleado
                 </h2>
                 <p className="mt-1 text-sm text-slate-600">
                   {nombreCompleto(historial.empleado)}
@@ -1453,14 +1608,50 @@ export default function OperacionesPage() {
                 type="button"
                 onClick={cerrarHistorial}
                 className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors duration-200 hover:bg-slate-100 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
-                aria-label="Cerrar historial de cargos"
+                aria-label="Cerrar historial del empleado"
               >
                 <X className="size-5" aria-hidden="true" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-5 sm:p-6">
-              {historial.cargando ? (
+            <div
+              role="tablist"
+              aria-label="Secciones del historial"
+              className="flex gap-2 border-b border-slate-200 px-5 sm:px-6"
+            >
+              {[
+                { clave: "cargos", etiqueta: "Historial de cargos" },
+                { clave: "recojos", etiqueta: "Recojos realizados" },
+              ].map(({ clave, etiqueta }) => {
+                const activa = historial.pestana === clave;
+
+                return (
+                  <button
+                    key={clave}
+                    type="button"
+                    role="tab"
+                    aria-selected={activa}
+                    aria-controls={`panel-historial-${clave}`}
+                    onClick={() => cambiarPestanaHistorial(clave)}
+                    className={`border-b-2 px-1 py-3 text-sm font-semibold transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+                      activa
+                        ? "border-emerald-600 text-emerald-700"
+                        : "border-transparent text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    {etiqueta}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div
+              id={`panel-historial-${historial.pestana}`}
+              role="tabpanel"
+              className="flex-1 overflow-y-auto p-5 sm:p-6"
+            >
+              {historial.pestana === "cargos" ? (
+                historial.cargando ? (
                 <div className="space-y-4">
                   {Array.from({ length: 3 }).map((_, indice) => (
                     <div key={indice} className="flex gap-3">
@@ -1487,10 +1678,11 @@ export default function OperacionesPage() {
               ) : (
                 <ol className="space-y-5">
                   {historialOrdenado.map((registro) => {
+                    const estadoTexto =
+                      registro.estado ??
+                      (registro.fecha_fin ? "Finalizado" : "Vigente");
                     const vigente =
-                      !registro.fecha_fin &&
-                      String(registro.estado ?? "").toLowerCase() !==
-                        "inactivo";
+                      String(estadoTexto).trim().toLowerCase() === "vigente";
 
                     return (
                       <li
@@ -1512,10 +1704,10 @@ export default function OperacionesPage() {
                             {registro.nombre_cargo ?? "Cargo"}
                           </p>
                           <p className="mt-0.5 text-sm text-slate-600">
-                            Desde {formatearFecha(registro.fecha_inicio)}
+                            Desde {formatearFecha(registro.fecha_inicio)} hasta{" "}
                             {registro.fecha_fin
-                              ? ` hasta ${formatearFecha(registro.fecha_fin)}`
-                              : " · vigente"}
+                              ? formatearFecha(registro.fecha_fin)
+                              : "Actualidad"}
                           </p>
                           <span
                             className={`mt-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ${
@@ -1524,13 +1716,110 @@ export default function OperacionesPage() {
                                 : "bg-slate-100 text-slate-600 ring-slate-200"
                             }`}
                           >
-                            {registro.estado ?? (vigente ? "Activo" : "Finalizado")}
+                            {estadoTexto}
                           </span>
                         </div>
                       </li>
                     );
                   })}
                 </ol>
+                )
+              ) : (
+                historial.cargandoRecojos ? (
+                  <div className="space-y-3">
+                    {Array.from({ length: 3 }).map((_, indice) => (
+                      <div
+                        key={indice}
+                        className="h-20 animate-pulse rounded-xl bg-slate-100"
+                      />
+                    ))}
+                  </div>
+                ) : historial.errorRecojos ? (
+                  <div className="flex items-start gap-2 rounded-xl bg-red-50 p-3 ring-1 ring-red-200">
+                    <CircleX
+                      className="mt-0.5 size-4 shrink-0 text-red-600"
+                      aria-hidden="true"
+                    />
+                    <p className="text-sm text-red-700">
+                      {historial.errorRecojos}
+                    </p>
+                  </div>
+                ) : historialRecojos.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-slate-500">
+                    Este empleado todavía no tiene recojos registrados.
+                  </p>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-xl bg-emerald-50 p-3 ring-1 ring-emerald-100">
+                        <p className="text-xs font-semibold text-emerald-800">
+                          Servicios realizados
+                        </p>
+                        <p className="mt-1 text-2xl font-bold text-emerald-900">
+                          {historialRecojos.length}
+                        </p>
+                      </div>
+                      <div className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+                        <p className="text-xs font-semibold text-slate-600">
+                          Total kg movilizados
+                        </p>
+                        <p className="mt-1 text-2xl font-bold text-slate-900">
+                          {formatearKg(totalKgHistorial)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <ul className="mt-5 space-y-3">
+                      {historialRecojos.map((recojo) => (
+                        <li
+                          key={recojo.id_recojo}
+                          className="rounded-xl border border-slate-200 p-3"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <p className="font-semibold text-slate-900">
+                                {recojo.cliente ?? `Recojo #${recojo.id_recojo}`}
+                              </p>
+                              <p className="mt-0.5 text-xs text-slate-500">
+                                {formatearFecha(recojo.fecha_recojo)} ·{" "}
+                                {formatearHora(recojo.hora_recojo)}
+                              </p>
+                            </div>
+                            <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
+                              {recojo.estado_recojo ?? "—"}
+                            </span>
+                          </div>
+                          <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                            <div>
+                              <dt className="text-slate-500">Placa</dt>
+                              <dd className="font-medium text-slate-800">
+                                {recojo.vehiculo_placa ?? "—"}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-slate-500">Rol en el recojo</dt>
+                              <dd className="font-medium text-slate-800">
+                                {recojo.rol_en_recojo ?? "—"}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-slate-500">Centro de reciclaje</dt>
+                              <dd className="font-medium text-slate-800">
+                                {recojo.centro_reciclaje ?? "—"}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-slate-500">Kilogramos</dt>
+                              <dd className="font-medium text-slate-800">
+                                {formatearKg(recojo.total_kg)}
+                              </dd>
+                            </div>
+                          </dl>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )
               )}
             </div>
 
@@ -1589,7 +1878,7 @@ function ConfirmModalCargo({
           <option value="">Selecciona un cargo</option>
           {cargos.map((cargo) => (
             <option key={cargo.id} value={cargo.id}>
-              {cargo.nombre}
+              {textoCargo(cargo)}
             </option>
           ))}
         </select>
