@@ -62,6 +62,23 @@ function esEstadoSinAccion(recojo) {
   return NOMBRES_SIN_ACCION.has(normalizarTexto(recojo.estado_recojo));
 }
 
+/** Orden cronológico estricto: más reciente primero (fecha, hora e id). */
+function ordenarRecojos(lista) {
+  return [...lista].sort((a, b) => {
+    const porFecha = String(b?.fecha_recojo ?? "").localeCompare(
+      String(a?.fecha_recojo ?? ""),
+    );
+    if (porFecha !== 0) return porFecha;
+
+    const porHora = String(b?.hora_recojo ?? "").localeCompare(
+      String(a?.hora_recojo ?? ""),
+    );
+    if (porHora !== 0) return porHora;
+
+    return Number(b?.id_recojo ?? 0) - Number(a?.id_recojo ?? 0);
+  });
+}
+
 function EstadoBadge({ estado }) {
   const clave = normalizarTexto(estado).toLowerCase();
   const estilo = ESTILOS_ESTADO[clave] ?? "bg-slate-100 text-slate-700 ring-slate-200";
@@ -235,6 +252,8 @@ export default function MisRecojosPage() {
   const nombreOperador =
     usuario?.nombre_completo ?? usuario?.correo ?? "Operador";
 
+  const recojosOrdenados = ordenarRecojos(recojos);
+
   return (
     <div className="space-y-6">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -359,17 +378,23 @@ export default function MisRecojosPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {recojos.map((recojo) => {
+                  {recojosOrdenados.map((recojo, indice) => {
                     const paso = siguientePaso(recojo);
+                    const numero = (pagina - 1) * tamanioPagina + indice + 1;
                     return (
                       <tr
                         key={recojo.id_recojo}
                         className="transition-colors duration-200 even:bg-slate-50/70 hover:bg-slate-100/80"
                       >
                         <td className="px-4 py-3">
-                          <p className="font-mono text-xs font-semibold text-slate-900">
-                            #{recojo.id_recojo}
-                          </p>
+                          <div className="flex items-baseline gap-1.5">
+                            <span className="text-base font-bold text-emerald-700">
+                              {numero}
+                            </span>
+                            <span className="font-mono text-xs text-slate-400">
+                              Cód. #{recojo.id_recojo}
+                            </span>
+                          </div>
                           <p className="mt-1 text-xs text-slate-500">
                             {recojo.vehiculo_placa ?? "—"}
                           </p>
@@ -447,8 +472,9 @@ export default function MisRecojosPage() {
           </div>
 
           <div className="grid gap-3 lg:hidden">
-            {recojos.map((recojo) => {
+            {recojosOrdenados.map((recojo, indice) => {
               const paso = siguientePaso(recojo);
+              const numero = (pagina - 1) * tamanioPagina + indice + 1;
               return (
                 <article
                   key={recojo.id_recojo}
@@ -456,8 +482,11 @@ export default function MisRecojosPage() {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="font-mono text-sm font-semibold text-slate-900">
-                        Recojo #{recojo.id_recojo}
+                      <p className="text-sm font-semibold text-emerald-700">
+                        {numero}{" "}
+                        <span className="font-mono text-xs font-normal text-slate-400">
+                          Cód. #{recojo.id_recojo}
+                        </span>
                       </p>
                       <p className="mt-0.5 text-base font-semibold text-slate-900">
                         {recojo.cliente ?? "—"}

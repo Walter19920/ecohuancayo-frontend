@@ -149,6 +149,9 @@ export function normalizarOpcion(item) {
 
   const nombre =
     item.nombre ??
+    item.nombre_centro ??
+    item.nombre_estado_recojo ??
+    item.nombre_tipo_residuo ??
     item.name ??
     item.descripcion ??
     item.label ??
@@ -157,6 +160,7 @@ export function normalizarOpcion(item) {
   const idNumerico = Number(id);
 
   return {
+    ...item,
     id: Number.isFinite(idNumerico) ? idNumerico : id,
     nombre: String(nombre),
   };
@@ -205,7 +209,7 @@ export function iniciales(nombre) {
 /** Etiqueta legible para un rol del backend. */
 export function formatearRol(rol) {
   const valor = String(rol ?? "").toUpperCase();
-  if (valor === "ADMIN") return "Administrador";
+  if (valor === "ADMIN" || valor === "ADMINISTRADOR") return "Administrador";
   if (valor === "SUPERVISOR") return "Supervisor";
   if (valor === "OPERADOR") return "Operador";
   if (valor === "EMPLEADO") return "Empleado";
@@ -215,7 +219,9 @@ export function formatearRol(rol) {
 /** Clases de color corporativas para la insignia de cada rol. */
 export function claseRol(rol) {
   const valor = String(rol ?? "").toUpperCase();
-  if (valor === "ADMIN") return "bg-indigo-100 text-indigo-700 ring-indigo-200";
+  if (valor === "ADMIN" || valor === "ADMINISTRADOR") {
+    return "bg-indigo-100 text-indigo-700 ring-indigo-200";
+  }
   if (valor === "SUPERVISOR") return "bg-sky-100 text-sky-700 ring-sky-200";
   if (valor === "OPERADOR") return "bg-amber-100 text-amber-800 ring-amber-200";
   return "bg-slate-100 text-slate-700 ring-slate-200";

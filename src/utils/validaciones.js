@@ -29,6 +29,13 @@ export function validarRequerido(valor, mensaje = "Este campo es obligatorio.") 
   return esVacio(valor) ? mensaje : null;
 }
 
+/** Texto obligatorio que no puede contener dígitos (nombres y apellidos). */
+export function validarTextoSinNumeros(valor, mensajeVacio, mensajeNumeros) {
+  const errorVacio = validarRequerido(valor, mensajeVacio);
+  if (errorVacio) return errorVacio;
+  return /\d/.test(String(valor)) ? mensajeNumeros : null;
+}
+
 /** RUC peruano: 11 dígitos con prefijo 10 o 20. */
 export function validarRuc(valor) {
   if (esVacio(valor)) return "El RUC es obligatorio.";
@@ -100,7 +107,7 @@ export function validarPeso(valor) {
   return null;
 }
 
-/** Capacidad de vehículo: numérica y mayor a 0. */
+/** Capacidad de vehículo: numérica y de al menos 100 kg. */
 export function validarCapacidad(valor) {
   if (esVacio(valor)) return "La capacidad es obligatoria.";
   const texto = String(valor).trim();
@@ -110,6 +117,9 @@ export function validarCapacidad(valor) {
   const numero = Number(texto);
   if (!Number.isFinite(numero) || numero <= 0) {
     return "La capacidad debe ser mayor a 0.";
+  }
+  if (numero < 100) {
+    return "La capacidad del vehículo debe ser de al menos 100 kg.";
   }
   return null;
 }
@@ -132,20 +142,27 @@ export function validarTelefono(valor) {
   return null;
 }
 
-/** Fecha en formato AAAA-MM-DD. */
-export function validarFecha(valor) {
+/** Fecha en formato AAAA-MM-DD; si se indica `fechaMinima`, no puede ser anterior. */
+export function validarFecha(valor, fechaMinima = null) {
   if (esVacio(valor)) return "Selecciona la fecha.";
   const fecha = String(valor).trim();
   if (!FECHA_REGEX.test(fecha)) return "Usa el formato AAAA-MM-DD.";
   const comprobacion = new Date(`${fecha}T00:00:00`);
   if (Number.isNaN(comprobacion.getTime())) return "La fecha no es válida.";
+  if (fechaMinima && fecha < String(fechaMinima)) {
+    return "La fecha de recojo no puede ser anterior a la fecha actual.";
+  }
   return null;
 }
 
-/** Hora en formato HH:mm o HH:mm:ss. */
-export function validarHora(valor) {
+/** Hora en formato HH:mm o HH:mm:ss; si se indica `horaMinima`, no puede ser anterior. */
+export function validarHora(valor, horaMinima = null) {
   if (esVacio(valor)) return "Selecciona la hora.";
-  if (!HORA_REGEX.test(String(valor).trim())) return "Usa el formato HH:mm.";
+  const hora = String(valor).trim();
+  if (!HORA_REGEX.test(hora)) return "Usa el formato HH:mm.";
+  if (horaMinima && hora.slice(0, 5) < String(horaMinima).slice(0, 5)) {
+    return "La hora de recojo no puede ser anterior a la hora actual para recojos programados hoy.";
+  }
   return null;
 }
 
@@ -251,9 +268,22 @@ export function validarCliente(datos, opciones = {}) {
     if (errorRuc) errores.ruc = errorRuc;
   }
 
+  const errorDireccion = validarRequerido(
+    datos?.direccion,
+    "La dirección es obligatoria.",
+  );
+  if (errorDireccion) errores.direccion = errorDireccion;
+
   if (!esVacio(datos?.correo)) {
     const errorCorreo = validarCorreo(datos.correo);
-    if (errorCorreo) errores.correo = errorCorreo;
+    if (errorCorreo) {
+      errores.correo = errorCorreo;
+    } else if (
+      String(datos.correo).trim().toLowerCase().endsWith("@ecohuancayo.pe")
+    ) {
+      errores.correo =
+        "El correo @ecohuancayo.pe está reservado para usuarios internos.";
+    }
   }
 
   const errorTelefono = validarTelefono(datos?.telefono);
@@ -266,10 +296,18 @@ export function validarCliente(datos, opciones = {}) {
 export function validarEmpleado(datos) {
   const errores = {};
 
-  const errorNombres = validarRequerido(datos?.nombres, "Los nombres son obligatorios.");
+  const errorNombres = validarTextoSinNumeros(
+    datos?.nombres,
+    "Los nombres son obligatorios.",
+    "Los nombres no pueden contener números.",
+  );
   if (errorNombres) errores.nombres = errorNombres;
 
-  const errorApellidos = validarRequerido(datos?.apellidos, "Los apellidos son obligatorios.");
+  const errorApellidos = validarTextoSinNumeros(
+    datos?.apellidos,
+    "Los apellidos son obligatorios.",
+    "Los apellidos no pueden contener números.",
+  );
   if (errorApellidos) errores.apellidos = errorApellidos;
 
   const errorDni = validarDni(datos?.dni);
@@ -308,7 +346,13 @@ export function validarUsuario(datos) {
   if (errorEmpleado) errores.id_empleado = errorEmpleado;
 
   const errorCorreo = validarCorreo(datos?.correo);
-  if (errorCorreo) errores.correo = errorCorreo;
+  if (errorCorreo) {
+    errores.correo = errorCorreo;
+  } else if (
+    !String(datos.correo).trim().toLowerCase().endsWith("@ecohuancayo.pe")
+  ) {
+    errores.correo = "El correo del usuario debe terminar en @ecohuancayo.pe.";
+  }
 
   const errorPassword = validarPassword(datos?.password);
   if (errorPassword) errores.password = errorPassword;
@@ -328,8 +372,10 @@ export function validarUsuario(datos) {
 /**
  * Valida el formulario completo de recojo.
  * `capacidadKg` es la capacidad del vehículo seleccionado (o null si no hay).
+ * `hoy` (AAAA-MM-DD) bloquea fechas anteriores a la fecha local actual.
+ * `horaActualHHMM` (HH:mm) bloquea horas pasadas cuando la fecha es hoy.
  */
-export function validarRecojo(datos, capacidadKg) {
+export function validarRecojo(datos, capacidadKg, hoy = null, horaActualHHMM = null) {
   const errores = {};
 
   const errorCliente = validarSeleccion(datos?.id_cliente, "Selecciona un cliente.");
@@ -350,10 +396,12 @@ export function validarRecojo(datos, capacidadKg) {
   );
   if (errorEstado) errores.id_estado_recojo = errorEstado;
 
-  const errorFecha = validarFecha(datos?.fecha_recojo);
+  const errorFecha = validarFecha(datos?.fecha_recojo, hoy);
   if (errorFecha) errores.fecha_recojo = errorFecha;
 
-  const errorHora = validarHora(datos?.hora_recojo);
+  const horaMinima =
+    hoy && datos?.fecha_recojo === hoy ? horaActualHHMM : null;
+  const errorHora = validarHora(datos?.hora_recojo, horaMinima);
   if (errorHora) errores.hora_recojo = errorHora;
 
   const resultadoResiduos = validarResiduos(datos?.residuos);
@@ -376,6 +424,10 @@ export function validarRecojo(datos, capacidadKg) {
 
   if (new Set(idsEmpleados).size !== idsEmpleados.length) {
     errores.empleados = "No repitas empleados asignados.";
+  } else if (idsEmpleados.length < 1) {
+    errores.empleados = "Selecciona al menos 1 empleado.";
+  } else if (idsEmpleados.length > 2) {
+    errores.empleados = "Máximo 2 operarios por unidad.";
   }
 
   return {

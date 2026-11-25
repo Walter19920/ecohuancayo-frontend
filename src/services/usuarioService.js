@@ -38,3 +38,17 @@ export async function cambiarPasswordUsuario(idUsuario, nuevaPassword) {
   });
   return data;
 }
+
+/** GET /usuarios/solicitudes-contrasena (solo ADMIN) */
+export async function listarSolicitudesContrasena() {
+  const { data } = await api.get("/usuarios/solicitudes-contrasena");
+  return Array.isArray(data) ? data : [];
+}
+
+/** PATCH /usuarios/solicitudes-contrasena/{id}/atender (solo ADMIN) */
+export async function atenderSolicitudContrasena(idSolicitud) {
+  const { data } = await api.patch(
+    `/usuarios/solicitudes-contrasena/${Number(idSolicitud)}/atender`,
+  );
+  return data;
+}

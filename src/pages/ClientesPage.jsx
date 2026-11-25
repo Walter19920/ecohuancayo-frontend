@@ -532,6 +532,7 @@ export default function ClientesPage() {
                   etiqueta="Dirección"
                   htmlFor="cliente-direccion"
                   error={errores.direccion}
+                  requerido
                 >
                   <input
                     id="cliente-direccion"
